@@ -6,8 +6,7 @@ const port = process.env.PORT || 5000;
 
 //middleware
 
-// maptaulislam
-//
+
 
 app.use(cors());
 app.use(express.json());
