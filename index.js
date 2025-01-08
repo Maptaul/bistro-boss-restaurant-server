@@ -6,8 +6,6 @@ const port = process.env.PORT || 5000;
 
 //middleware
 
-
-
 app.use(cors());
 app.use(express.json());
 
@@ -33,17 +31,19 @@ async function run() {
     const reviewCollection = client.db("bistroDb").collection("reviews");
     const cartsCollection = client.db("bistroDb").collection("carts");
 
-
     //users related apis
-    app.post('/users', async(req, res)=>{
+    app.post("/users", async (req, res) => {
       const user = req.body;
+      // insert email if user doesn't exists:
+      //you can do this many ways(1. email unique, 2. upsert 3. simple checking )
+      const query = { email: user.email };
+      const existingUser = await userCollection.findOne(query);
+      if (existingUser) {
+        return res.send({ message: "user already exists", insertedId: null });
+      }
       const result = await userCollection.insertOne(user);
-      res.send(result)
-    })
-
-
-
-
+      res.send(result);
+    });
 
     app.get("/menu", async (req, res) => {
       const result = await menuCollection.find().toArray();
@@ -57,14 +57,12 @@ async function run() {
 
     // carts collection
 
-    app.get("/carts", async (req, res) =>{
+    app.get("/carts", async (req, res) => {
       const email = req.query.email;
-      const query = {email: email}
+      const query = { email: email };
       const result = await cartsCollection.find(query).toArray();
-      res.send(result)
-    })
-
-
+      res.send(result);
+    });
 
     app.post("/carts", async (req, res) => {
       const cartItem = req.body;
@@ -72,12 +70,12 @@ async function run() {
       res.send(result);
     });
 
-    app.delete('/carts/:id', async(req, res) =>{
+    app.delete("/carts/:id", async (req, res) => {
       const id = req.params.id;
-      const query = {_id: new ObjectId(id)}
+      const query = { _id: new ObjectId(id) };
       const result = await cartsCollection.deleteOne(query);
       res.send(result);
-    })
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
