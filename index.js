@@ -214,9 +214,9 @@ async function run() {
     // payment related api
 
     app.get("/payments/:email", verifyToken, async (req, res) => {
-      const query = {email: req.params.email}
-      if(req.params.email !== req.decoded.email){
-        return res.status(403).send({message:'forbidden access'})
+      const query = { email: req.params.email };
+      if (req.params.email !== req.decoded.email) {
+        return res.status(403).send({ message: "forbidden access" });
       }
       const result = await paymentCollection.find(query).toArray();
       res.send(result);
@@ -237,6 +237,14 @@ async function run() {
       const deleteResult = await cartsCollection.deleteMany(query);
 
       res.send({ paymentResult, deleteResult });
+    });
+
+    //stats or analytics
+    app.get("/admin-stats", async (req, res) => {
+      const users = await userCollection.estimatedDocumentCount();
+      res.send({
+        users,
+      });
     });
 
     // Send a ping to confirm a successful connection
