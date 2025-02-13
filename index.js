@@ -4,19 +4,18 @@ const cors = require("cors");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
-const formData = require('form-data');
-const Mailgun = require('mailgun.js');
+const formData = require("form-data");
+const Mailgun = require("mailgun.js");
 const mailgun = new Mailgun(formData);
-const axios = require('axios');
+const axios = require("axios");
 
 const mg = mailgun.client({
-  username: 'api', 
+  username: "api",
   key: process.env.MAIL_GUN_API_KEY,
 });
 const port = process.env.PORT || 5000;
 
 //middleware
-
 
 app.use(cors());
 app.use(express.json());
@@ -210,7 +209,7 @@ async function run() {
     app.post("/create-payment-intent", async (req, res) => {
       const { price } = req.body;
       const amount = parseInt(price * 100);
-      console.log(amount, "amount inside the intent");
+      // console.log(amount, "amount inside the intent");
       const paymentIntent = await stripe.paymentIntents.create({
         amount: amount,
         currency: "usd",
@@ -237,7 +236,7 @@ async function run() {
       const paymentResult = await paymentCollection.insertOne(payment);
 
       //  carefully delete each item from the cart
-      console.log("payment info", payment);
+      // console.log("payment info", payment);
       const query = {
         _id: {
           $in: payment.cartIds.map((id) => new ObjectId(id)),
@@ -249,112 +248,119 @@ async function run() {
       //send user email and order details
 
       mg.messages
-      .create(process.env.MAIL_SENDING_DOMAIN, {
-        from: "Mailgun Sandbox <postmaster@sandbox847b43fd525e441ab00fbc3483c48bc3.mailgun.org>",
-        to: ["maptaul912@gmail.com"],
-        subject: "Bisto Boss Order Confirmation",
-        text: "Testing some Mailgun awesomness!",
-        html: `<div>
+        .create(process.env.MAIL_SENDING_DOMAIN, {
+          from: "Mailgun Sandbox <postmaster@sandbox847b43fd525e441ab00fbc3483c48bc3.mailgun.org>",
+          to: ["maptaul912@gmail.com"],
+          subject: "Bisto Boss Order Confirmation",
+          text: "Testing some Mailgun awesomness!",
+          html: `<div>
         <h2>Thank you for your order </h2>
         <h4>Your Transaction Id: <strong> ${payment.transactionId}</strong></h4>
         <p>We would like to get your feedback about the food</p>
-        </div>`
-      })
-      .then(msg => console.log(msg)) // logs response data
-      .catch(err => console.error(err)); // logs any error
-
-
-
+        </div>`,
+        })
+        .then((msg) => console.log(msg)) // logs response data
+        .catch((err) => console.error(err)); // logs any error
 
       res.send({ paymentResult, deleteResult });
     });
 
     app.post("/create-ssl-payment", async (req, res) => {
       const payment = req.body;
-      console.log(payment, "payment info");
+      // console.log(payment, "payment info");
 
       const transactionId = new ObjectId().toString();
       payment.transactionId = transactionId;
 
-      const initiate = { 
+      // step1-initialized the data
+      const initiate = {
         store_id: process.env.SSLCOMMERZ_STORE_ID,
         store_passwd: process.env.SSLCOMMERZ_STORE_PASSWORD,
         total_amount: payment.price,
-        currency: 'BDT',
+        currency: "BDT",
         tran_id: transactionId,
-        success_url: "http://localhost:5000/success-payment",
-        fail_url: "http://localhost:5173/fail",
-        cancel_url: "http://localhost:5173/cancle",
-        ipn_url: "http://localhost:5000/ipn-success-payment",
+        success_url: "https://y-nine-tawny.vercel.app/success-payment",
+        fail_url: "https://bistro-boss-restaurant-490ff.web.app/fail",
+        cancel_url: "https://bistro-boss-restaurant-490ff.web.app/cancle",
+        ipn_url: "https://y-nine-tawny.vercel.app/ipn-success-payment",
         cus_name: `${payment.name}`,
         cus_email: `${payment.email}`,
         cus_add1: "address",
         cus_city: "city",
         cus_country: "Bangladesh",
         cus_phone: "01846035436",
-        shipping_method: 'NO',
-        product_name: 'Food',
-        product_category: 'Food',
-        product_profile: 'general',
+        shipping_method: "NO",
+        product_name: "Food",
+        product_category: "Food",
+        product_profile: "general",
         product_profile: "general",
         multi_card_name: "mastercard, visacard, amexcard",
-        value_a:"ref001_A&",
-        value_b:"ref002_B&",
-        value_c:"ref003_C&",
-        value_d:"ref004_D",
-      }
+        value_a: "ref001_A&",
+        value_b: "ref002_B&",
+        value_c: "ref003_C&",
+        value_d: "ref004_D",
+      };
+      //step2- send the data to the gateway
       const iniResponse = await axios({
-        url:"https://sandbox.sslcommerz.com/gwprocess/v4/api.php",
+        url: "https://sandbox.sslcommerz.com/gwprocess/v4/api.php",
         method: "POST",
         data: initiate,
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
+          "Content-Type": "application/x-www-form-urlencoded",
         },
-      })
+      });
       const saveData = await paymentCollection.insertOne(payment);
+      //step3- get the response from the gateway
       const gateWayUrl = iniResponse.data.GatewayPageURL;
-      console.log(gateWayUrl, "gateWayUrl");
-      res.send({gateWayUrl});
+      // console.log(gateWayUrl, "gateWayUrl");
+      //step4- redirect the user to the gateway
+      res.send({ gateWayUrl });
     });
     app.post("/success-payment", async (req, res) => {
+      //step5- get the response from the gateway
       const paymentSuccess = req.body;
-      const {data} = await axios.get(`https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php?val_id=${paymentSuccess.val_id}&store_id=${process.env.SSLCOMMERZ_STORE_ID}&store_passwd=${process.env.SSLCOMMERZ_STORE_PASSWORD}&format=json`);
+      //step6- verify the payment
+      const { data } = await axios.get(
+        `https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php?val_id=${paymentSuccess.val_id}&store_id=${process.env.SSLCOMMERZ_STORE_ID}&store_passwd=${process.env.SSLCOMMERZ_STORE_PASSWORD}&format=json`
+      );
 
-      if(data.status !== 'VALID'){
-        return res.send({message: "Invalid Payment"});
+      if (data.status !== "VALID") {
+        return res.send({ message: "Invalid Payment" });
       }
 
+      //step7- update the payment status
       const updatePayment = await paymentCollection.updateOne(
-        {transactionId: paymentSuccess.tran_id}, 
-        {$set: {
-          status: "success"
+        { transactionId: paymentSuccess.tran_id },
+        {
+          $set: {
+            status: "success",
+          },
         }
-      }
-    );
+      );
+      //step8- send the user to the success page
+      const payment = await paymentCollection.findOne({
+        transactionId: paymentSuccess.tran_id,
+      });
 
-    const payment = await paymentCollection.findOne({transactionId: paymentSuccess.tran_id});
+      // console.log(payment, "is a Valid Payment");
 
-    console.log(payment, "is a Valid Payment");
+      //  carefully delete each item from the cart
+      //  console.log("payment info", payment);
+      const query = {
+        _id: {
+          $in: payment.cartIds.map((id) => new ObjectId(id)),
+        },
+      };
+      //step9- delete the cart
+      const deleteResult = await cartsCollection.deleteMany(query);
+      // console.log(deleteResult, "deleteResult");
 
-     //  carefully delete each item from the cart
-     console.log("payment info", payment);
-     const query = {
-       _id: {
-         $in: payment.cartIds.map((id) => new ObjectId(id)),
-       },
-     };
+      //step10- send the user email and order details
+      res.redirect("https://bistro-boss-restaurant-490ff.web.app/dashboard/cart");
+      // console.log(updatePayment, "updatePayment");
 
-     const deleteResult = await cartsCollection.deleteMany(query);
-     
-
-
-    res.redirect("http://localhost:5173/dashboard/cart");
-    console.log(updatePayment, "updatePayment");
-
-      console.log(data, "is a Valid Payment");
-
+      // console.log(data, "is a Valid Payment");
     });
-
 
     //stats or analytics
     app.get("/admin-stats", verifyToken, verifyAdmin, async (req, res) => {
@@ -457,7 +463,7 @@ app.get("/", (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+  // console.log(`Server is running on port ${port}`);
 });
 
 /**
