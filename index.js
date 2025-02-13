@@ -7,6 +7,7 @@ const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const formData = require('form-data');
 const Mailgun = require('mailgun.js');
 const mailgun = new Mailgun(formData);
+const axios = require('axios');
 
 const mg = mailgun.client({
   username: 'api', 
@@ -16,8 +17,10 @@ const port = process.env.PORT || 5000;
 
 //middleware
 
+
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded());
 
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.kwdxq.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -265,6 +268,93 @@ async function run() {
 
       res.send({ paymentResult, deleteResult });
     });
+
+    app.post("/create-ssl-payment", async (req, res) => {
+      const payment = req.body;
+      console.log(payment, "payment info");
+
+      const transactionId = new ObjectId().toString();
+      payment.transactionId = transactionId;
+
+      const initiate = { 
+        store_id: process.env.SSLCOMMERZ_STORE_ID,
+        store_passwd: process.env.SSLCOMMERZ_STORE_PASSWORD,
+        total_amount: payment.price,
+        currency: 'BDT',
+        tran_id: transactionId,
+        success_url: "http://localhost:5000/success-payment",
+        fail_url: "http://localhost:5173/fail",
+        cancel_url: "http://localhost:5173/cancle",
+        ipn_url: "http://localhost:5000/ipn-success-payment",
+        cus_name: `${payment.name}`,
+        cus_email: `${payment.email}`,
+        cus_add1: "address",
+        cus_city: "city",
+        cus_country: "Bangladesh",
+        cus_phone: "01846035436",
+        shipping_method: 'NO',
+        product_name: 'Food',
+        product_category: 'Food',
+        product_profile: 'general',
+        product_profile: "general",
+        multi_card_name: "mastercard, visacard, amexcard",
+        value_a:"ref001_A&",
+        value_b:"ref002_B&",
+        value_c:"ref003_C&",
+        value_d:"ref004_D",
+      }
+      const iniResponse = await axios({
+        url:"https://sandbox.sslcommerz.com/gwprocess/v4/api.php",
+        method: "POST",
+        data: initiate,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      })
+      const saveData = await paymentCollection.insertOne(payment);
+      const gateWayUrl = iniResponse.data.GatewayPageURL;
+      console.log(gateWayUrl, "gateWayUrl");
+      res.send({gateWayUrl});
+    });
+    app.post("/success-payment", async (req, res) => {
+      const paymentSuccess = req.body;
+      const {data} = await axios.get(`https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php?val_id=${paymentSuccess.val_id}&store_id=${process.env.SSLCOMMERZ_STORE_ID}&store_passwd=${process.env.SSLCOMMERZ_STORE_PASSWORD}&format=json`);
+
+      if(data.status !== 'VALID'){
+        return res.send({message: "Invalid Payment"});
+      }
+
+      const updatePayment = await paymentCollection.updateOne(
+        {transactionId: paymentSuccess.tran_id}, 
+        {$set: {
+          status: "success"
+        }
+      }
+    );
+
+    const payment = await paymentCollection.findOne({transactionId: paymentSuccess.tran_id});
+
+    console.log(payment, "is a Valid Payment");
+
+     //  carefully delete each item from the cart
+     console.log("payment info", payment);
+     const query = {
+       _id: {
+         $in: payment.cartIds.map((id) => new ObjectId(id)),
+       },
+     };
+
+     const deleteResult = await cartsCollection.deleteMany(query);
+     
+
+
+    res.redirect("http://localhost:5173/dashboard/cart");
+    console.log(updatePayment, "updatePayment");
+
+      console.log(data, "is a Valid Payment");
+
+    });
+
 
     //stats or analytics
     app.get("/admin-stats", verifyToken, verifyAdmin, async (req, res) => {
